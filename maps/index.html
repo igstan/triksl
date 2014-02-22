@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="UTF-8">
+<title></title>
+<style type="text/css">
+body {
+  text-align: center;
+}
+
+svg {
+  border: solid #f0f0f0 1px;
+}
+
+path {
+  /*fill: #f1dddb;*/
+}
+
+/*.subunit.Bucharest { fill: red; }*/
+/*.subunit.Prahova { fill: #bacadc; }*/
+
+.subunit-boundary {
+  fill: none;
+  stroke-width:1px;
+  stroke: #777;
+  stroke-dasharray: 2,2;
+  stroke-linejoin: round;
+}
+.romania {
+  fill: none;
+  stroke-width:1px;
+  stroke: #777;
+  /*stroke-dasharray: 2,2;*/
+  stroke-linejoin: round;
+}
+.subunit-label {
+  fill: #85484b;
+  fill-opacity: 1;
+  font-size: 11px;
+  text-anchor: middle;
+  font-family: menlo;
+}
+</style>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+</head>
+<body>
+
+<p>Dataset: <a href="http://data.gov.ro/dataset/boli-infectioase-anual/resource/df905bdf-1489-4f93-84a5-e4136d819c71">Boli infecțioase</a></p>
+
+<script>
+var transliterate = (function () {
+  var map = {
+    // LATIN
+    'À': 'A', 'Á': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'A', 'Å': 'A', 'Æ': 'AE', 'Ç':
+    'C', 'È': 'E', 'É': 'E', 'Ê': 'E', 'Ë': 'E', 'Ì': 'I', 'Í': 'I', 'Î': 'I',
+    'Ï': 'I', 'Ð': 'D', 'Ñ': 'N', 'Ò': 'O', 'Ó': 'O', 'Ô': 'O', 'Õ': 'O', 'Ö':
+    'O', 'Ő': 'O', 'Ø': 'O', 'Ù': 'U', 'Ú': 'U', 'Û': 'U', 'Ü': 'U', 'Ű': 'U',
+    'Ý': 'Y', 'Þ': 'TH', 'ß': 'ss', 'à':'a', 'á':'a', 'â': 'a', 'ã': 'a', 'ä':
+    'a', 'å': 'a', 'æ': 'ae', 'ç': 'c', 'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+    'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ð': 'd', 'ñ': 'n', 'ò': 'o', 'ó':
+    'o', 'ô': 'o', 'õ': 'o', 'ö': 'o', 'ő': 'o', 'ø': 'o', 'ù': 'u', 'ú': 'u',
+    'û': 'u', 'ü': 'u', 'ű': 'u', 'ý': 'y', 'þ': 'th', 'ÿ': 'y',
+
+    // TURKISH
+    'ş':'s', 'Ş':'S', 'ı':'i', 'İ':'I', 'ç':'c', 'Ç':'C', 'ü':'u', 'Ü':'U',
+    'ö':'o', 'Ö':'O', 'ğ':'g', 'Ğ':'G',
+
+    // CZECH
+    'č':'c', 'ď':'d', 'ě':'e', 'ň': 'n', 'ř':'r', 'š':'s', 'ť':'t', 'ů':'u',
+    'ž':'z', 'Č':'C', 'Ď':'D', 'Ě':'E', 'Ň': 'N', 'Ř':'R', 'Š':'S', 'Ť':'T',
+    'Ů':'U', 'Ž':'Z',
+
+    // POLISH
+    'ą':'a', 'ć':'c', 'ę':'e', 'ł':'l', 'ń':'n', 'ó':'o', 'ś':'s', 'ź':'z',
+    'ż':'z', 'Ą':'A', 'Ć':'C', 'Ę':'e', 'Ł':'L', 'Ń':'N', 'Ó':'o', 'Ś':'S',
+    'Ź':'Z', 'Ż':'Z',
+
+    // LATVIAN
+    'ā':'a', 'č':'c', 'ē':'e', 'ģ':'g', 'ī':'i', 'ķ':'k', 'ļ':'l', 'ņ':'n',
+    'š':'s', 'ū':'u', 'ž':'z', 'Ā':'A', 'Č':'C', 'Ē':'E', 'Ģ':'G', 'Ī':'i',
+    'Ķ':'k', 'Ļ':'L', 'Ņ':'N', 'Š':'S', 'Ū':'u', 'Ž':'Z',
+
+    // ROMANIAN
+    'ă':'a', 'î':'i', 'â':'a', 'ș':'s', 'ț':'t', 'Ă':'A', 'Î':'I', 'Â':'A',
+    'Ș':'S', 'Ț':'T'
+  };
+
+  return function transliterate(str) {
+    var transliterated = '';
+
+    for (var i=0, max=str.length; i<max; i++) {
+      var c = str[i];
+      transliterated += (c in map) ? map[c] : c;
+    }
+
+    return transliterated;
+  };
+
+})();
+
+var width = 1200;
+var height = 750;
+
+var color = d3.scale.threshold()
+  .domain([0, 500, 1000, 2000, 3000])
+  .range(["#f2f0f7", "#dadaeb", "#bcbddc", "#9e9ac8", "#756bb1", "#54278f"]);
+
+var svg = d3.select("body").append("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+queue()
+  .defer(d3.json, "romania.json")
+  .defer(d3.csv, "boli-infectioase.csv")
+  .await(ready);
+
+function ready(error, ro, data) {
+  var rateById = {};
+  data.forEach(function (d) {
+    console.log(d);
+    rateById[d.judet] = +d.cazuri;
+  });
+
+  var subunits = topojson.feature(ro, ro.objects.subunits);
+
+  var projection = d3.geo.mercator()
+    .center([25, 46])
+    .scale(6000)
+    .translate([width / 2, height / 2]);
+
+  var path = d3.geo.path()
+    .projection(projection);
+
+  svg.append("path")
+    .datum(subunits)
+    .attr("d", path)
+    .attr("class", "romania");
+
+  svg.selectAll(".subunit")
+    .data(topojson.feature(ro, ro.objects.subunits).features)
+    .enter().append("path")
+    .attr("class", function (d) { return "subunit " + transliterate(d.id).toLowerCase(); })
+    .attr("d", path)
+    .style("fill", function (d) {
+      return color(rateById[transliterate(d.id).toLowerCase()]);
+    });
+
+  svg.append("path")
+    .datum(topojson.mesh(ro, ro.objects.subunits, function (a, b) { return a !== b; }))
+    .attr("d", path)
+    .attr("class", "subunit-boundary");
+
+  // Capitale de județ
+
+  // svg.append("path")
+  //   .datum(topojson.feature(ro, ro.objects.places))
+  //   .attr("d", path.pointRadius(3))
+  //   .attr("class", "place");
+
+  // svg.selectAll(".place-label")
+  //   .data(topojson.feature(ro, ro.objects.places).features)
+  //   .enter().append("text")
+  //   .attr("class", "place-label")
+  //   .attr("transform", function(d) { return "translate(" + projection(d.geometry.coordinates) + ")"; })
+  //   .attr("dy", ".35em")
+  //   .text(function(d) { return d.properties.name; });
+
+  svg.selectAll(".subunit-label")
+    .data(topojson.feature(ro, ro.objects.subunits).features)
+    .enter().append("text")
+    .attr("class", function(d) { return "subunit-label " + transliterate(d.id).toLowerCase(); })
+    .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+    .attr("dy", ".35em")
+    .text(function(d) { return transliterate(d.properties.name); });
+}
+</script>
+
+</body>
+</html>
