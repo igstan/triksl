@@ -1,3 +1,14 @@
+## Run Locally
+
+Make sure you're in the **maps** directory and then start a simple Python
+server using:
+
+```
+$ python3 -m http.server 8000
+```
+
+Now go to: http://localhost:8000.
+
 ## Conversion Commands
 
 ```bash
